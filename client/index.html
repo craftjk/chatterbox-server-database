@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>chatterbox</title>
+    <link rel="stylesheet" href="styles/styles.css">
+
+    <!-- dependencies -->
+    <script src="bower_components/jquery/jquery.min.js"></script>
+    <script src="bower_components/underscore/underscore.js"></script>
+    <script src="bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+    <link href="bower_components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+
+
+    <!-- your scripts -->
+    <script src="scripts/config.js"></script>
+    <script src="scripts/app.js"></script>
+
+  </head>
+  <body>
+    <div id="container">
+      <ul class="nav navbar-nav">
+        <li class="dropdown">
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown">Rooms<b class="caret"></b></a>
+          <ul id="roomSelect" class="dropdown-menu">
+          </ul>
+        </li>
+        <li class="dropdown">
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown">Add a Friend<b class="caret"></b></a>
+          <ul id="users" class="dropdown-menu">
+          </ul>
+        </li>
+        <li class="roomname">
+        </li>
+      </ul>
+
+
+
+      <div id="main">
+        <h1>chatterbox</h1>
+        <div id="send">
+          <form class="submit">
+            <input type="text" id="message" />
+            <input type="submit" class="btn btn-default" />
+          </form>
+        </div>
+        <div id="chats">
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
