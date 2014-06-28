@@ -1,9 +1,5 @@
-/* You should implement your request handler function in this file.
- * And hey! This is already getting passed to http.createServer()
- * in basic-server.js. But it won't work as is.
- * You'll have to figure out a way to export this function from
- * this file and include it in basic-server.js so that it actually works.
- * *Hint* Check out the node module documentation at http://nodejs.org/api/modules.html. */
+var mysql = require('mysql');
+
 var exports = module.exports = {};
 var lastId = 0;
 var fs = require('fs');
@@ -19,6 +15,15 @@ if(!storageByRoom instanceof Object){
   storageByRoom = {};
 }
 
+var connection = mysql.createConnection({
+  host     : 'localhost',
+  user     : 'root',
+  database : 'chat'
+});
+
+connection.connect();
+console.log('Connected to chat...');
+
 exports.handleRequest = function(request, response) {
   /* the 'request' argument comes from nodes http module. It includes info about the
   request - such as what URL the browser is requesting. */
@@ -33,36 +38,30 @@ exports.handleRequest = function(request, response) {
     }
     return room;
   };
-  var handlePostedMessage = function(data){
-    var message = JSON.parse(data);
 
-    message.createdAt = new Date();
-    message.objectId = lastId;
-    lastId++;
-    var room = JSON.stringify(message.roomname);
-    if(!storageByRoom.hasOwnProperty(room)){
-      storageByRoom[room] = [];
-    }
-    var roomOverride = getRoom();
-    if(roomOverride !== undefined){
-      room = roomOverride;
-      message.roomname = room;
-    }
-    storageByRoom[room].push(message);
-    storage.push(message);
 
-    //Save storage and storageByRoom to text file
-    fs.writeFile("./storage.json", JSON.stringify(storage));
-    fs.writeFile("./storageByRoom.json", JSON.stringify(storageByRoom));
+  var handlePostedMessage = function(JSONdata){
+    var data = JSON.parse(JSONdata);
+    console.log('data', data);
+
+    isUserInList(data, function(userInList){
+      if(userInList){
+        isRoomInlist(data, function(roomInList){
+          if (roomInList) {
+            insertNewMessage(data);
+          }
+        });
+      }
+    });
 
   };
 
   var responseText = '';
   var room = getRoom();
 
-  console.log("Serving request type " + request.method + " for url " + request.url);
+  // console.log("Serving request type " + request.method + " for url " + request.url);
 
-  var statusCode = 200;
+  // var statusCode = 200;
 
   if(request.url.match(/\/classes\/messages\??.*/)){
     if(request.method === 'POST'){
@@ -95,7 +94,7 @@ exports.handleRequest = function(request, response) {
   headers['Content-Type'] = "text/plain";
 
   /* .writeHead() tells our server what HTTP status code to send back */
-  console.log('status code: ' + statusCode);
+  // console.log('status code: ' + statusCode);
   response.writeHead(statusCode, headers);
 
   /* Make sure to always call response.end() - Node will not send
@@ -105,6 +104,59 @@ exports.handleRequest = function(request, response) {
 
   response.end(responseText);
 };
+
+var isUserInList = function(data, callback) {
+  connection.query('SELECT * FROM user WHERE name =?', [data.username], function(err, rows){
+    if (err) throw err;
+    if (rows.length > 0) {
+      callback(true);
+    } else {
+      insertUsernameIntoDB(data, callback);
+    }
+  });
+};
+
+var insertUsernameIntoDB = function(data, callback) {
+  connection.query('INSERT INTO user (name) VALUES (?)', [data.username], function(err, rows) {
+    if (err) {
+      callback(false);
+    } else {
+      callback(true);
+    }
+  });
+};
+
+var isRoomInlist = function(data, callback) {
+  connection.query('SELECT * FROM room WHERE name =?', [data.roomname], function(err, rows){
+    if (err) throw err;
+    if (rows.length > 0) {
+      callback(true);
+    } else {
+      insertRoomIntoDB(data, callback);
+    }
+  });
+};
+
+var insertRoomIntoDB = function(data, callback) {
+  connection.query('INSERT INTO room (name) VALUES (?)', [data.roomname], function(err, result) {
+    if (err) {
+      throw err;
+      callback(false);
+    } else {
+      callback(true);
+    }
+  });
+};
+
+var insertNewMessage = function(data) {
+  connection.query('INSERT INTO message (text, user_id, room_id)' +
+                   'VALUES (?, (SELECT id FROM user WHERE name = ?), (SELECT id FROM room WHERE name = ?))',
+                   [data.text, data.username, data.roomname], function(err, result) {
+                     if (err) throw err;
+                   });
+};
+
+
 
 /* These headers will allow Cross-Origin Resource Sharing (CORS).
  * This CRUCIAL code allows this server to talk to websites that
