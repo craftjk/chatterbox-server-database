@@ -1,19 +1,5 @@
 var mysql = require('mysql');
-
 var exports = module.exports = {};
-var lastId = 0;
-var fs = require('fs');
-var storage = fs.readFileSync('./storage.json');
-storage = JSON.parse(storage);
-if(!Array.isArray(storage)){
-  storage = [];
-}
-
-var storageByRoom = fs.readFileSync('./storageByRoom.json');
-storageByRoom = JSON.parse(storageByRoom);
-if(!storageByRoom instanceof Object){
-  storageByRoom = {};
-}
 
 var connection = mysql.createConnection({
   host     : 'localhost',
@@ -25,14 +11,12 @@ connection.connect();
 console.log('Connected to chat...');
 
 exports.handleRequest = function(request, response) {
-  /* the 'request' argument comes from nodes http module. It includes info about the
-  request - such as what URL the browser is requesting. */
+  var blocker = false;
+  var statusCode = 200;
 
-  /* Documentation for both request and response can be found at
-   * http://nodemanual.org/0.8.14/nodejs_ref_guide/http.html */
   var getRoom = function(){
     var tempArr = request.url.split('/');
-    var room = undefined;
+    var room;
     if (tempArr[1] === 'classes' && tempArr[2] === 'room') {
       room = tempArr[3];
     }
@@ -41,6 +25,7 @@ exports.handleRequest = function(request, response) {
 
 
   var handlePostedMessage = function(JSONdata){
+    var blocker = true;
     var data = JSON.parse(JSONdata);
     console.log('data', data);
 
@@ -49,26 +34,31 @@ exports.handleRequest = function(request, response) {
         isRoomInlist(data, function(roomInList){
           if (roomInList) {
             insertNewMessage(data);
+            response.writeHead(statusCode, headers);
+            response.end(responseText);
           }
         });
       }
     });
-
   };
 
   var responseText = '';
   var room = getRoom();
-
-  // console.log("Serving request type " + request.method + " for url " + request.url);
-
-  // var statusCode = 200;
 
   if(request.url.match(/\/classes\/messages\??.*/)){
     if(request.method === 'POST'){
       statusCode = 201;
       request.on('data', handlePostedMessage);
     } else {
-      responseText = JSON.stringify({results:storage});
+      blocker = true;
+      var result = getAllMessages(function(rows){
+        if (rows.length > 0) {
+          responseText = JSON.stringify({results: rows});
+          response.writeHead(statusCode, headers);
+          response.end(responseText);
+        }
+      });
+      console.log('responseText', responseText);
       statusCode = 200;
     }
   } else if (room !== undefined) {
@@ -76,33 +66,19 @@ exports.handleRequest = function(request, response) {
       statusCode = 201;
       request.on('data', handlePostedMessage);
     } else {
-      if (storageByRoom[room] === undefined) {
-        storageByRoom[room] =[];
-      }
-      responseText = JSON.stringify({results:storageByRoom[room]});
-      statusCode = 200;
+      // return messages by room;
     }
   } else {
     statusCode = 404;
   }
 
 
-  /* Without this line, this server wouldn't work. See the note
-   * below about CORS. */
   var headers = exports.defaultCorsHeaders;
-
   headers['Content-Type'] = "text/plain";
-
-  /* .writeHead() tells our server what HTTP status code to send back */
-  // console.log('status code: ' + statusCode);
-  response.writeHead(statusCode, headers);
-
-  /* Make sure to always call response.end() - Node will not send
-   * anything back to the client until you do. The string you pass to
-   * response.end() will be the body of the response - i.e. what shows
-   * up in the browser.*/
-
-  response.end(responseText);
+  if(!blocker){
+    response.writeHead(statusCode, headers);
+    response.end(responseText);
+  }
 };
 
 var isUserInList = function(data, callback) {
@@ -156,7 +132,16 @@ var insertNewMessage = function(data) {
                    });
 };
 
-
+var getAllMessages = function(callback) {
+  connection.query('SELECT u.name username, m.text text, m.created_at createdAt, r.name roomname from message m, user u, room r where m.user_id = u.id', function(err, rows) {
+    if (err) {
+      throw err;
+    } else {
+      console.log('get all messages success');
+      callback(rows);
+    }
+  });
+};
 
 /* These headers will allow Cross-Origin Resource Sharing (CORS).
  * This CRUCIAL code allows this server to talk to websites that
